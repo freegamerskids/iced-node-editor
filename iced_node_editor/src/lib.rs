@@ -13,5 +13,6 @@ pub use node::node;
 pub use connection::connection;
 
 pub use node_element::GraphNodeElement;
+pub use node_element::ScalableWidget;
 pub use node::Node;
 pub use graph_container::GraphContainer;
