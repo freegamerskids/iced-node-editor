@@ -8,6 +8,7 @@ use iced::{
     event, mouse, Background, Color, Element, Event, Length, Point, Rectangle, Size, Vector,
 };
 
+use crate::node_element::SocketLayoutState;
 use crate::{
     matrix::Matrix,
     styles::graph_container::{Appearance, StyleSheet},
@@ -140,7 +141,7 @@ where
     fn tag(&self) -> widget::tree::Tag {
         widget::tree::Tag::of::<widget::tree::State>()
     }
-    
+
     fn state(&self) -> widget::tree::State {
         widget::tree::State::new(GraphContainerState {
             drag_start_position: None,
@@ -160,8 +161,18 @@ where
         let scale = self.matrix.get_scale();
         let offset = self.matrix.get_translation();
 
+        let mut socket_layout_state = SocketLayoutState {
+            inputs: vec![],
+            outputs: vec![],
+        };
+
         for node in &self.content {
-            let mut node = node.as_scalable_widget().layout(_renderer, &limits, scale);
+            let mut node = node.as_scalable_widget().layout(
+                _renderer,
+                &limits,
+                scale,
+                &mut socket_layout_state,
+            );
             node = node.translate(Vector::new(offset.0, offset.1));
 
             content.push(node);

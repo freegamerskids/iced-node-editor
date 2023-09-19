@@ -1,7 +1,7 @@
 use iced::advanced::{renderer, widget, Clipboard, Layout, Shell, Widget};
 use iced::{
-    alignment, event, mouse, Alignment, Background, Color, Element, Event, Length, Padding, Point,
-    Rectangle, Size, Vector,
+    alignment, event, mouse, Alignment, Background, Color, Element, Event, Length, Padding, Pixels,
+    Point, Rectangle, Size, Vector,
 };
 
 use crate::{
@@ -21,10 +21,49 @@ where
     padding: Padding,
     style: <Renderer::Theme as StyleSheet>::Style,
     content: Element<'a, Message, Renderer>,
+    sockets: Vec<Socket<'a, Message, Renderer>>,
+    socket_spacing: f32,
     position: Point,
     horizontal_alignment: alignment::Horizontal,
     vertical_alignment: alignment::Vertical,
     on_translate: Option<Box<dyn Fn((f32, f32)) -> Message + 'a>>,
+}
+
+pub struct Socket<'a, Message, Renderer> {
+    pub role: SocketRole,
+
+    pub min_height: f32,
+    pub max_height: f32,
+
+    pub blob_side: SocketSide,
+    pub blob_radius: f32,
+    pub blob_border_radius: f32,
+    pub blob_color: Color,
+    pub blob_border_color: Option<Color>,
+
+    pub content: Element<'a, Message, Renderer>,
+    pub content_alignment: alignment::Horizontal,
+}
+
+impl<'a, Message, Renderer> Socket<'a, Message, Renderer> {
+    pub fn blob_center(&self, node_bounds: Rectangle, socket_bounds: Rectangle) -> Point {
+        let x = match self.blob_side {
+            SocketSide::Left => node_bounds.x,
+            SocketSide::Right => node_bounds.x + node_bounds.width,
+        };
+        let y = socket_bounds.center_y();
+        Point::new(x, y)
+    }
+}
+
+pub enum SocketSide {
+    Left,
+    Right,
+}
+
+pub enum SocketRole {
+    In,
+    Out,
 }
 
 struct NodeState {
@@ -48,6 +87,8 @@ where
             padding: Padding::ZERO,
             style: Default::default(),
             content: content.into(),
+            sockets: vec![],
+            socket_spacing: 0.0,
             position: Point::new(0.0, 0.0),
             horizontal_alignment: alignment::Horizontal::Left,
             vertical_alignment: alignment::Vertical::Top,
@@ -117,6 +158,16 @@ where
         self.vertical_alignment = alignment::Vertical::Center;
         self
     }
+
+    pub fn sockets(mut self, sockets: Vec<Socket<'a, Message, Renderer>>) -> Self {
+        self.sockets = sockets;
+        self
+    }
+
+    pub fn socket_spacing(mut self, socket_spacing: impl Into<Pixels>) -> Self {
+        self.socket_spacing = socket_spacing.into().0;
+        self
+    }
 }
 
 pub fn node<'a, Message, Renderer>(
@@ -139,6 +190,7 @@ where
         renderer: &Renderer,
         limits: &iced::advanced::layout::Limits,
         scale: f32,
+        socket_state: &mut super::node_element::SocketLayoutState,
     ) -> iced::advanced::layout::Node {
         let limits = limits
             .loose()
@@ -152,18 +204,75 @@ where
             .as_widget()
             .layout(renderer, &limits.pad(self.padding).loose());
 
-        let padding = self.padding.fit(content.size(), limits.max());
-        let size = limits.pad(padding).resolve(content.size());
-        let size = Size::new(size.width * scale, size.height * scale);
+        let content_intrinsic_size = content.size();
+        let padding = self.padding.fit(content_intrinsic_size, limits.max());
 
-        content.move_to(Point::new(padding.left.into(), padding.top.into()));
+        let content_frame_size = limits.resolve(content.size());
+
+        let content_available_width =
+            content_frame_size.width * scale - padding.left - padding.right;
+        let content_available_height =
+            content_frame_size.height * scale - padding.top - padding.bottom;
+        let content_available_size = Size::new(content_available_width, content_available_height);
+
+        content.move_to(Point::new(padding.left, padding.top));
         content.align(
             Alignment::from(self.horizontal_alignment),
             Alignment::from(self.vertical_alignment),
-            size,
+            content_available_size,
         );
 
-        let node = iced::advanced::layout::Node::with_children(size, vec![content]);
+        let mut children = vec![content];
+
+        let mut socket_top: f32 = content_available_size.height;
+        for socket in self.sockets.iter() {
+            socket_top += self.socket_spacing * scale;
+
+            let socket_content_available_width =
+                content_frame_size.width - padding.left - padding.right;
+
+            let socket_limits = iced::advanced::layout::Limits::new(
+                Size {
+                    width: 0.0,
+                    height: socket.min_height,
+                },
+                Size {
+                    width: socket_content_available_width,
+                    height: socket.max_height,
+                },
+            );
+
+            let mut socket_content = socket.content.as_widget().layout(renderer, &socket_limits);
+
+            let socket_content_size_scaled = Size::new(
+                socket_content.size().width * scale,
+                socket_content.size().height * scale,
+            );
+            let socket_area_size_scaled = Size::new(
+                content_available_size.width,
+                socket_content_size_scaled.height,
+            );
+            socket_content.align(
+                Alignment::from(socket.content_alignment),
+                Alignment::Center,
+                socket_area_size_scaled,
+            );
+
+            let mut socket_node = iced::advanced::layout::Node::with_children(
+                socket_area_size_scaled,
+                vec![socket_content],
+            );
+            socket_node.move_to(Point::new(self.padding.left, padding.top + socket_top));
+            children.push(socket_node);
+
+            socket_top += socket_content_size_scaled.height;
+        }
+
+        let total_size = Size::new(
+            content_frame_size.width * scale,
+            padding.top + socket_top + padding.bottom,
+        );
+        let node = iced::advanced::layout::Node::with_children(total_size, children);
 
         node.translate(Vector::new(self.position.x, self.position.y) * scale)
     }
@@ -223,17 +332,75 @@ where
             );
         }
 
-        self.content.as_widget().draw(
-            tree,
-            renderer,
-            theme,
-            &renderer::Style {
-                text_color: style.text_color.unwrap_or(renderer_style.text_color),
-            },
-            layout.children().next().unwrap(),
-            cursor,
-            viewport,
+        let mut children_iter = layout.children();
+        let content_layout = children_iter
+            .next()
+            .expect("there should be a layout node for the graph node content");
+
+        println!(
+            "layout {:?} content_layout {:?}",
+            layout.bounds(),
+            content_layout.bounds()
         );
+
+        // Only draw node content if it would be sufficiently big
+        if layout.bounds().width > content_layout.bounds().width
+            && layout.bounds().height > content_layout.bounds().height
+        {
+            self.content.as_widget().draw(
+                tree,
+                renderer,
+                theme,
+                &renderer::Style {
+                    text_color: style.text_color.unwrap_or(renderer_style.text_color),
+                },
+                content_layout,
+                cursor,
+                viewport,
+            );
+        }
+
+        for (socket_index, socket_layout) in children_iter.enumerate() {
+            let socket = &self.sockets[socket_index];
+
+            let child_layout = socket_layout
+                .children()
+                .next()
+                .expect("the socket layout node should have one child");
+
+            // Only draw socket content if it would be sufficiently big
+            if socket_layout.bounds().width > child_layout.bounds().width
+                && (socket_layout.bounds().height * 2.0) > child_layout.bounds().height
+            {
+                socket.content.as_widget().draw(
+                    tree,
+                    renderer,
+                    theme,
+                    &renderer::Style {
+                        text_color: style.text_color.unwrap_or(renderer_style.text_color),
+                    },
+                    child_layout,
+                    cursor,
+                    viewport,
+                );
+            }
+
+            // Draw blob
+            let blob_center = socket.blob_center(bounds, socket_layout.bounds());
+            let blob_bounds = Rectangle::new(
+                blob_center - Vector::new(socket.blob_radius, socket.blob_radius),
+                Size::new(socket.blob_radius * 2.0, socket.blob_radius * 2.0),
+            );
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: blob_bounds,
+                    border_radius: socket.blob_border_radius.into(),
+                    border_width: style.border_width,
+                    border_color: socket.blob_border_color.unwrap_or(style.border_color),
+                },
+                Background::Color(socket.blob_color),
+            );
+        }
     }
 
     fn on_event(

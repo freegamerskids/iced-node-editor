@@ -71,6 +71,7 @@ where
         _renderer: &Renderer,
         _limits: &iced::advanced::layout::Limits,
         scale: f32,
+        socket_state: &mut super::node_element::SocketLayoutState,
     ) -> iced::advanced::layout::Node {
         let spline = generate_spline(
             Vector::new(self.from.x, self.from.y) * scale,

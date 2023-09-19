@@ -1,18 +1,21 @@
+mod connection;
 mod graph_container;
-pub mod styles;
 mod matrix;
+mod mesh_renderer;
 mod node;
 mod node_element;
-mod mesh_renderer;
-mod connection;
+pub mod styles;
 
 pub use matrix::Matrix;
 
+pub use connection::connection;
 pub use graph_container::graph_container;
 pub use node::node;
-pub use connection::connection;
 
+pub use graph_container::GraphContainer;
+pub use node::Node;
+pub use node::Socket;
+pub use node::SocketRole;
+pub use node::SocketSide;
 pub use node_element::GraphNodeElement;
 pub use node_element::ScalableWidget;
-pub use node::Node;
-pub use graph_container::GraphContainer;

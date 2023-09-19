@@ -1,4 +1,5 @@
 use iced::advanced::{layout, renderer, Widget};
+use iced::Point;
 use std::borrow::Borrow;
 
 pub struct GraphNodeElement<'a, Message, Renderer> {
@@ -34,7 +35,18 @@ pub trait ScalableWidget<Message, Renderer>
 where
     Renderer: renderer::Renderer,
 {
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits, scale: f32) -> layout::Node;
+    fn layout(
+        &self,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+        scale: f32,
+        socket_state: &mut SocketLayoutState,
+    ) -> layout::Node;
+}
+
+pub struct SocketLayoutState {
+    pub(crate) inputs: Vec<Vec<Point>>,
+    pub(crate) outputs: Vec<Vec<Point>>,
 }
 
 impl<'a, Message, Renderer> GraphNodeElement<'a, Message, Renderer>
