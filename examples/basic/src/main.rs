@@ -94,8 +94,10 @@ impl Sandbox for Example {
             }
             Message::TranslationChanged(x, y) => self.matrix = self.matrix.translate(x, y),
             Message::MoveNode(i, x, y) => {
-                self.nodes[i].position =
-                    Point::new(self.nodes[i].position.x + x / self.matrix.get_scale(), self.nodes[i].position.y + y / self.matrix.get_scale());
+                self.nodes[i].position = Point::new(
+                    self.nodes[i].position.x + x / self.matrix.get_scale(),
+                    self.nodes[i].position.y + y / self.matrix.get_scale(),
+                );
             }
         }
     }
