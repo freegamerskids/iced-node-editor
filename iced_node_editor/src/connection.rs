@@ -56,7 +56,7 @@ where
     }
 }
 
-pub fn connection<'a, Message, Renderer>(from: Point, to: Point) -> Connection<Message, Renderer>
+pub fn connection<Message, Renderer>(from: Point, to: Point) -> Connection<Message, Renderer>
 where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
@@ -64,7 +64,7 @@ where
     Connection::between(Endpoint::Absolute(from), Endpoint::Absolute(to))
 }
 
-impl<'a, Message, Renderer> ScalableWidget<Message, Renderer> for Connection<Message, Renderer>
+impl<Message, Renderer> ScalableWidget<Message, Renderer> for Connection<Message, Renderer>
 where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
@@ -81,9 +81,9 @@ where
         socket_state.done = true;
 
         let spline = generate_spline(
-            self.link.start.resolve(scale, &socket_state),
+            self.link.start.resolve(scale, socket_state),
             1.0,
-            self.link.end.resolve(scale, &socket_state),
+            self.link.end.resolve(scale, socket_state),
             self.number_of_segments,
             1.0_f32,
         );
@@ -107,7 +107,7 @@ where
     }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for Connection<Message, Renderer>
+impl<Message, Renderer> Widget<Message, Renderer> for Connection<Message, Renderer>
 where
     Renderer: renderer::Renderer + MeshRenderer,
     Renderer::Theme: StyleSheet,

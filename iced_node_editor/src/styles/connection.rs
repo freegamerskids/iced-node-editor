@@ -5,14 +5,6 @@ pub struct Appearance {
     pub color: Option<Color>,
 }
 
-impl std::default::Default for Appearance {
-    fn default() -> Self {
-        Self {
-            color: None
-        }
-    }
-}
-
 pub trait StyleSheet {
     type Style: Default;
     fn appearance(&self, style: &Self::Style) -> Appearance;

@@ -167,9 +167,9 @@ where
     }
 }
 
-pub fn graph_container<'a, Message, Renderer>(
-    content: Vec<GraphNodeElement<'a, Message, Renderer>>,
-) -> GraphContainer<'a, Message, Renderer>
+pub fn graph_container<Message, Renderer>(
+    content: Vec<GraphNodeElement<Message, Renderer>>,
+) -> GraphContainer<Message, Renderer>
 where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
@@ -282,7 +282,7 @@ where
         viewport: &Rectangle<f32>,
     ) -> event::Status {
         let mut status = event::Status::Ignored;
-        let mut state = tree.state.downcast_mut::<GraphContainerState>();
+        let state = tree.state.downcast_mut::<GraphContainerState>();
         let socket_state = self
             .socket_state
             .lock()
@@ -571,7 +571,7 @@ where
                     renderer_style,
                     layout,
                     cursor,
-                    &viewport,
+                    viewport,
                 );
             }
         });
@@ -590,7 +590,7 @@ where
     }
 }
 
-fn draw_background<'a, Renderer>(renderer: &mut Renderer, bounds: Rectangle, style: Appearance)
+fn draw_background<Renderer>(renderer: &mut Renderer, bounds: Rectangle, style: Appearance)
 where
     Renderer: renderer::Renderer,
 {
@@ -607,7 +607,7 @@ where
     );
 }
 
-fn draw_guidelines<'a, Renderer>(
+fn draw_guidelines<Renderer>(
     renderer: &mut Renderer,
     bounds: Rectangle,
     offset: (f32, f32),
@@ -688,8 +688,8 @@ fn normalize_scale(scale: f32) -> f32 {
     let log_2 = scale.log2().floor();
 
     if log_2.abs() > f32::EPSILON {
-        return scale / 2.0_f32.powf(log_2);
+        scale / 2.0_f32.powf(log_2)
     } else {
-        return scale;
+        scale
     }
 }

@@ -9,7 +9,7 @@ pub struct Appearance {
     pub border_color: Color,
 }
 
-impl std::default::Default for Appearance {
+impl Default for Appearance {
     fn default() -> Self {
         Self {
             text_color: None,

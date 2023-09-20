@@ -137,7 +137,7 @@ impl Sandbox for Example {
         container(
             graph_container(graph_content)
                 .on_translate(|p| Message::TranslationChanged(p.0, p.1))
-                .on_scale(|x, y, s| Message::ScaleChanged(x, y, s))
+                .on_scale(Message::ScaleChanged)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .matrix(self.matrix),

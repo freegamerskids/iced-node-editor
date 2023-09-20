@@ -12,20 +12,6 @@ pub struct Appearance {
     pub major_guidelines_spacing: Option<f32>,
 }
 
-impl std::default::Default for Appearance {
-    fn default() -> Self {
-        Self {
-            background: None,
-            minor_guidelines_color: None,
-            mid_guidelines_color: None,
-            major_guidelines_color: None,
-            minor_guidelines_spacing: None,
-            mid_guidelines_spacing: None,
-            major_guidelines_spacing: None,
-        }
-    }
-}
-
 pub trait StyleSheet {
     type Style: Default;
     fn appearance(&self, style: &Self::Style) -> Appearance;

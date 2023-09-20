@@ -272,7 +272,7 @@ impl Sandbox for Example {
             graph_container(graph_content)
                 .dangling_source(self.dangling_source)
                 .on_translate(|p| Message::TranslationChanged(p.0, p.1))
-                .on_scale(|x, y, s| Message::ScaleChanged(x, y, s))
+                .on_scale(Message::ScaleChanged)
                 .on_connect(Message::Connect)
                 .on_disconnect(Message::Disconnect)
                 .on_dangling(Message::Dangling)

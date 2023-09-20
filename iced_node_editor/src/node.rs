@@ -308,11 +308,11 @@ where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    fn children(&self) -> Vec<iced::advanced::widget::Tree> {
-        vec![iced::advanced::widget::Tree::new(&self.content)]
+    fn children(&self) -> Vec<widget::Tree> {
+        vec![widget::Tree::new(&self.content)]
     }
 
-    fn diff(&self, tree: &mut iced::advanced::widget::Tree) {
+    fn diff(&self, tree: &mut widget::Tree) {
         tree.diff_children(std::slice::from_ref(&self.content))
     }
 
@@ -332,13 +332,13 @@ where
 
     fn draw(
         &self,
-        tree: &iced::advanced::widget::Tree,
+        tree: &widget::Tree,
         renderer: &mut Renderer,
         theme: &<Renderer as iced::advanced::Renderer>::Theme,
         renderer_style: &renderer::Style,
-        layout: iced::advanced::Layout<'_>,
-        cursor: iced::advanced::mouse::Cursor,
-        viewport: &iced::Rectangle,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
     ) {
         let style = theme.appearance(&self.style);
         let bounds = layout.bounds();
@@ -431,7 +431,7 @@ where
         viewport: &Rectangle<f32>,
     ) -> event::Status {
         let mut status = event::Status::Ignored;
-        let mut state = tree.state.downcast_mut::<NodeState>();
+        let state = tree.state.downcast_mut::<NodeState>();
 
         if let Some(cursor_position) = cursor.position() {
             if let Some(start) = state.drag_start_position {
@@ -466,12 +466,9 @@ where
 
         if let Some(cursor_position) = cursor.position() {
             if status == event::Status::Ignored && layout.bounds().contains(cursor_position) {
-                match event {
-                    Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                        state.drag_start_position = Some(cursor_position);
-                        status = event::Status::Captured;
-                    }
-                    _ => {}
+                if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
+                    state.drag_start_position = Some(cursor_position);
+                    status = event::Status::Captured;
                 }
             }
         }
