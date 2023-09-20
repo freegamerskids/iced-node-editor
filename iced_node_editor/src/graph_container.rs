@@ -290,7 +290,7 @@ where
 
         // Socket-related processing
         if let Event::Mouse(mouse_event) = event {
-            if let Some(cursor_position) = cursor.position() {
+            if let Some(cursor_position) = cursor.position_in(layout.bounds()) {
                 let offset = self.matrix.get_translation();
                 let translated_cursor_position =
                     Point::new(cursor_position.x - offset.0, cursor_position.y - offset.1);
@@ -398,7 +398,7 @@ where
 
         if let Some(start) = state.drag_start_position {
             // Moving the viewport
-            if let Some(cursor_position) = cursor.position() {
+            if let Some(cursor_position) = cursor.position_in(layout.bounds()) {
                 match event {
                     Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                         state.drag_start_position = None;
@@ -438,7 +438,7 @@ where
         }
 
         if status == event::Status::Ignored {
-            if let Some(cursor_position) = cursor.position() {
+            if let Some(cursor_position) = cursor.position_in(layout.bounds()) {
                 // Initiating viewport movement/scaling
                 match event {
                     Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
