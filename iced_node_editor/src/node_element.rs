@@ -1,5 +1,5 @@
 use iced::advanced::{layout, renderer, Widget};
-use iced::Point;
+use iced::Rectangle;
 use std::borrow::Borrow;
 
 pub struct GraphNodeElement<'a, Message, Renderer> {
@@ -44,9 +44,19 @@ where
     ) -> layout::Node;
 }
 
+#[derive(Debug)]
 pub struct SocketLayoutState {
-    pub(crate) inputs: Vec<Vec<Point>>,
-    pub(crate) outputs: Vec<Vec<Point>>,
+    pub(crate) inputs: Vec<Vec<Rectangle>>,
+    pub(crate) outputs: Vec<Vec<Rectangle>>,
+    pub(crate) done: bool,
+}
+
+impl SocketLayoutState {
+    pub fn clear(&mut self) {
+        self.inputs.clear();
+        self.outputs.clear();
+        self.done = false;
+    }
 }
 
 impl<'a, Message, Renderer> GraphNodeElement<'a, Message, Renderer>

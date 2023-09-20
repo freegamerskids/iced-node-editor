@@ -46,22 +46,25 @@ pub struct Socket<'a, Message, Renderer> {
 }
 
 impl<'a, Message, Renderer> Socket<'a, Message, Renderer> {
-    pub fn blob_center(&self, node_left: f32, node_width: f32, center_y: f32) -> Point {
+    pub fn blob_rect(&self, node_left: f32, node_width: f32, center_y: f32) -> Rectangle {
         let x = match self.blob_side {
             SocketSide::Left => node_left,
             SocketSide::Right => node_left + node_width,
         };
-        Point::new(x, center_y)
+        Rectangle::new(
+            Point::new(x - self.blob_radius, center_y - self.blob_radius),
+            Size::new(self.blob_radius * 2.0, self.blob_radius * 2.0),
+        )
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SocketSide {
     Left,
     Right,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SocketRole {
     In,
     Out,
@@ -194,6 +197,10 @@ where
         scale: f32,
         socket_state: &mut super::node_element::SocketLayoutState,
     ) -> iced::advanced::layout::Node {
+        if socket_state.done {
+            panic!("the graph content must consist of nodes, then connections; it is not allowed to have (more) nodes after the connections");
+        }
+
         let limits = limits
             .loose()
             .max_width(self.max_width)
@@ -226,8 +233,8 @@ where
 
         let mut children = vec![content];
 
-        let mut in_sockets: Vec<Point> = vec![];
-        let mut out_sockets: Vec<Point> = vec![];
+        let mut in_sockets: Vec<Rectangle> = vec![];
+        let mut out_sockets: Vec<Rectangle> = vec![];
 
         let mut socket_top: f32 = content_available_size.height;
         for socket in self.sockets.iter() {
@@ -270,14 +277,14 @@ where
             socket_node.move_to(Point::new(self.padding.left, padding.top + socket_top));
             children.push(socket_node);
 
-            let blob_center = socket.blob_center(
+            let blob_rect = socket.blob_rect(
                 0.0,
                 content_frame_size.width * scale,
                 padding.top + socket_top + socket_area_size_scaled.height / 2.0,
             ) + (Vector::new(self.position.x, self.position.y) * scale);
             match socket.role {
-                SocketRole::In => in_sockets.push(blob_center),
-                SocketRole::Out => out_sockets.push(blob_center),
+                SocketRole::In => in_sockets.push(blob_rect),
+                SocketRole::Out => out_sockets.push(blob_rect),
             }
 
             socket_top += socket_content_size_scaled.height;
@@ -398,15 +405,11 @@ where
             }
 
             // Draw blob
-            let blob_center =
-                socket.blob_center(bounds.x, bounds.width, socket_layout.bounds().center_y());
-            let blob_bounds = Rectangle::new(
-                blob_center - Vector::new(socket.blob_radius, socket.blob_radius),
-                Size::new(socket.blob_radius * 2.0, socket.blob_radius * 2.0),
-            );
+            let blob_rect =
+                socket.blob_rect(bounds.x, bounds.width, socket_layout.bounds().center_y());
             renderer.fill_quad(
                 renderer::Quad {
-                    bounds: blob_bounds,
+                    bounds: blob_rect,
                     border_radius: socket.blob_border_radius.into(),
                     border_width: style.border_width,
                     border_color: socket.blob_border_color.unwrap_or(style.border_color),

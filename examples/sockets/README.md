@@ -1,9 +1,9 @@
-# Basic example
+# Sockets example
 
 ## Running the example
 
 ```bash
-$ cargo run -p basic_example
+$ cargo run -p sockets_example
 ```
 
 ## Compile and run in browser
@@ -15,7 +15,7 @@ cargo install wasm-bindgen-cli https
 
 cargo build --target wasm32-unknown-unknown
 
-wasm-bindgen ../../target/wasm32-unknown-unknown/debug/basic_example.wasm --out-dir . --target web --no-typescript
+wasm-bindgen ../../target/wasm32-unknown-unknown/debug/sockets_example.wasm --out-dir . --target web --no-typescript
 
 http
 ```

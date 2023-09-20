@@ -16,8 +16,7 @@ where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    from: Endpoint,
-    to: Endpoint,
+    link: Link,
     width: f32,
     number_of_segments: usize,
     style: <Renderer::Theme as StyleSheet>::Style,
@@ -31,16 +30,19 @@ where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    pub fn new(from: Endpoint, to: Endpoint) -> Self {
+    pub fn new(link: Link) -> Self {
         Connection {
             spline: Mutex::new(Vec::new()),
-            from,
-            to,
+            link,
             width: 1.2,
             number_of_segments: 20,
             phantom_message: std::marker::PhantomData,
             style: Default::default(),
         }
+    }
+
+    pub fn between(first: Endpoint, second: Endpoint) -> Self {
+        Self::new(Link::from_unordered(first, second))
     }
 
     pub fn width(mut self, width: f32) -> Self {
@@ -59,7 +61,7 @@ where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    Connection::new(Endpoint::Absolute(from), Endpoint::Absolute(to))
+    Connection::between(Endpoint::Absolute(from), Endpoint::Absolute(to))
 }
 
 impl<'a, Message, Renderer> ScalableWidget<Message, Renderer> for Connection<Message, Renderer>
@@ -74,10 +76,14 @@ where
         scale: f32,
         socket_state: &mut super::node_element::SocketLayoutState,
     ) -> iced::advanced::layout::Node {
+        // Set the flag that we've started to process connections;
+        // this will cause a panic if there are further nodes
+        socket_state.done = true;
+
         let spline = generate_spline(
-            self.from.resolve(scale, &socket_state),
+            self.link.start.resolve(scale, &socket_state),
             1.0,
-            self.to.resolve(scale, &socket_state),
+            self.link.end.resolve(scale, &socket_state),
             self.number_of_segments,
             1.0_f32,
         );
@@ -147,8 +153,8 @@ where
     }
 
     fn width(&self) -> Length {
-        if let Endpoint::Absolute(from_point) = self.from {
-            if let Endpoint::Absolute(to_point) = self.to {
+        if let Endpoint::Absolute(from_point) = self.link.start {
+            if let Endpoint::Absolute(to_point) = self.link.end {
                 return Length::Fixed((from_point.x - to_point.x).abs() + self.width);
             }
         }
@@ -157,8 +163,8 @@ where
     }
 
     fn height(&self) -> Length {
-        if let Endpoint::Absolute(from_point) = self.from {
-            if let Endpoint::Absolute(to_point) = self.to {
+        if let Endpoint::Absolute(from_point) = self.link.start {
+            if let Endpoint::Absolute(to_point) = self.link.end {
                 return Length::Fixed((from_point.y - to_point.y).abs() + self.width);
             }
         }
@@ -179,26 +185,117 @@ where
     }
 }
 
-#[derive(Debug)]
-pub enum Endpoint {
-    Absolute(Point),
-    Socket(usize, SocketRole, usize),
+#[derive(Debug, Clone)]
+pub struct Link {
+    start: Endpoint,
+    end: Endpoint,
 }
 
-impl Endpoint {
-    fn resolve(&self, scale: f32, socket_state: &super::node_element::SocketLayoutState) -> Vector {
-        match self {
-            Endpoint::Absolute(point) => Vector::new(point.x * scale, point.y * scale),
-            Endpoint::Socket(node_index, role, socket_index) => {
-                let node_sockets = match role {
-                    SocketRole::In => &socket_state.inputs,
-                    SocketRole::Out => &socket_state.outputs,
-                };
-                let point = node_sockets[*node_index][*socket_index];
-                Vector::new(point.x, point.y)
+impl Link {
+    pub fn new(start: Endpoint, end: Endpoint) -> Self {
+        // Assert correct order
+        if let Endpoint::Socket(l_start) = start {
+            assert_eq!(l_start.role, SocketRole::Out)
+        }
+        if let Endpoint::Socket(l_end) = end {
+            assert_eq!(l_end.role, SocketRole::In)
+        }
+
+        Self { start, end }
+    }
+
+    pub fn from_unordered(e1: Endpoint, e2: Endpoint) -> Self {
+        match e1 {
+            Endpoint::Absolute(_) => match e2 {
+                Endpoint::Absolute(_) => Self::new(e1, e2),
+                Endpoint::Socket(l2) => match l2.role {
+                    SocketRole::In => Self::new(e1, e2),
+                    SocketRole::Out => Self::new(e2, e1),
+                },
+            },
+            Endpoint::Socket(l1) => {
+                if let Endpoint::Socket(l2) = e2 {
+                    if l1.role == l2.role {
+                        panic!("tried to order two logical endpoints with same role");
+                    }
+                }
+
+                match l1.role {
+                    SocketRole::In => Self::new(e2, e1),
+                    SocketRole::Out => Self::new(e1, e2),
+                }
             }
         }
     }
+
+    pub fn start(&self) -> &Endpoint {
+        &self.start
+    }
+
+    pub fn end(&self) -> &Endpoint {
+        &self.end
+    }
+
+    pub fn unwrap_sockets(&self) -> (&LogicalEndpoint, &LogicalEndpoint) {
+        if let Endpoint::Socket(l_start) = &self.start {
+            if let Endpoint::Socket(l_end) = &self.end {
+                return (l_start, l_end);
+            }
+        }
+
+        panic!("tried to call unwrap_sockets() on a Link containing absolute endpoints");
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Endpoint {
+    Absolute(Point),
+    Socket(LogicalEndpoint),
+}
+
+impl Endpoint {
+    pub fn socket(node_index: usize, role: SocketRole, socket_index: usize) -> Self {
+        Endpoint::Socket(LogicalEndpoint {
+            node_index,
+            role,
+            socket_index,
+        })
+    }
+
+    pub fn start(node_index: usize, socket_index: usize) -> Self {
+        Self::socket(node_index, SocketRole::Out, socket_index)
+    }
+
+    pub fn end(node_index: usize, socket_index: usize) -> Self {
+        Self::socket(node_index, SocketRole::In, socket_index)
+    }
+
+    fn resolve(&self, scale: f32, socket_state: &super::node_element::SocketLayoutState) -> Vector {
+        match self {
+            Endpoint::Absolute(point) => Vector::new(point.x * scale, point.y * scale),
+            Endpoint::Socket(logical) => {
+                let node_sockets = match logical.role {
+                    SocketRole::In => &socket_state.inputs,
+                    SocketRole::Out => &socket_state.outputs,
+                };
+
+                match node_sockets.get(logical.node_index) {
+                    Some(sockets) => match sockets.get(logical.socket_index) {
+                        Some(rect) => Vector::new(rect.center_x(), rect.center_y()),
+                        None => panic!("socket index {} out of bounds for role {:?} of node {}; only found {} socket(s)", logical.socket_index, logical.role, logical.node_index, sockets.len())
+                    }
+                    None => panic!("node index {} out of bounds for role {:?}; only found {} node(s)", logical.node_index, logical.role, node_sockets.len())
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct LogicalEndpoint {
+    pub node_index: usize,
+    pub role: SocketRole,
+    pub socket_index: usize,
 }
 
 fn line_to_polygon(points: &[Vector], width: f32) -> (Vec<Vector>, Vec<u32>) {

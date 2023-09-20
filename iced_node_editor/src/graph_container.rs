@@ -7,12 +7,14 @@ use iced::{
     },
     event, mouse, Background, Color, Element, Event, Length, Point, Rectangle, Size, Vector,
 };
+use std::sync::Mutex;
 
+use crate::connection::LogicalEndpoint;
 use crate::node_element::SocketLayoutState;
 use crate::{
     matrix::Matrix,
     styles::graph_container::{Appearance, StyleSheet},
-    GraphNodeElement,
+    Endpoint, GraphNodeElement, Link, SocketRole,
 };
 
 pub struct GraphContainer<'a, Message, Renderer>
@@ -29,6 +31,13 @@ where
     matrix: Matrix,
     on_translate: Option<Box<dyn Fn((f32, f32)) -> Message + 'a>>,
     on_scale: Option<Box<dyn Fn(f32, f32, f32) -> Message + 'a>>,
+    on_connect: Option<Box<dyn Fn(Link) -> Message + 'a>>,
+    on_disconnect: Option<Box<dyn Fn(LogicalEndpoint, Point) -> Message + 'a>>,
+    on_dangling: Option<Box<dyn Fn(Option<(LogicalEndpoint, Link)>) -> Message + 'a>>,
+    dangling_source: Option<LogicalEndpoint>,
+
+    phantom_message: std::marker::PhantomData<Message>,
+    socket_state: Mutex<SocketLayoutState>,
 }
 
 struct GraphContainerState {
@@ -44,6 +53,9 @@ where
         GraphContainer {
             on_translate: None,
             on_scale: None,
+            on_connect: None,
+            on_disconnect: None,
+            on_dangling: None,
             matrix: Matrix::identity(),
             width: Length::Shrink,
             height: Length::Shrink,
@@ -51,6 +63,14 @@ where
             max_height: f32::MAX,
             style: Default::default(),
             content,
+            dangling_source: None,
+
+            phantom_message: std::marker::PhantomData,
+            socket_state: Mutex::new(SocketLayoutState {
+                inputs: vec![],
+                outputs: vec![],
+                done: false,
+            }),
         }
     }
 
@@ -67,6 +87,30 @@ where
         F: 'a + Fn(f32, f32, f32) -> Message,
     {
         self.on_scale = Some(Box::new(f));
+        self
+    }
+
+    pub fn on_connect<F>(mut self, f: F) -> Self
+    where
+        F: 'a + Fn(Link) -> Message,
+    {
+        self.on_connect = Some(Box::new(f));
+        self
+    }
+
+    pub fn on_disconnect<F>(mut self, f: F) -> Self
+    where
+        F: 'a + Fn(LogicalEndpoint, Point) -> Message,
+    {
+        self.on_disconnect = Some(Box::new(f));
+        self
+    }
+
+    pub fn on_dangling<F>(mut self, f: F) -> Self
+    where
+        F: 'a + Fn(Option<(LogicalEndpoint, Link)>) -> Message,
+    {
+        self.on_dangling = Some(Box::new(f));
         self
     }
 
@@ -98,6 +142,28 @@ where
     pub fn style(mut self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
         self.style = style.into();
         self
+    }
+
+    pub fn dangling_source(mut self, dangling_source: Option<LogicalEndpoint>) -> Self {
+        self.dangling_source = dangling_source;
+        self
+    }
+
+    fn try_emit_dangling(
+        &self,
+        shell: &mut Shell<'_, Message>,
+        cursor_position: Point,
+        source: LogicalEndpoint,
+    ) {
+        if let Some(f) = &self.on_dangling {
+            shell.publish(f(Some((
+                source,
+                Link::from_unordered(
+                    Endpoint::Socket(source),
+                    Endpoint::Absolute(cursor_position),
+                ),
+            ))));
+        }
     }
 }
 
@@ -161,10 +227,11 @@ where
         let scale = self.matrix.get_scale();
         let offset = self.matrix.get_translation();
 
-        let mut socket_layout_state = SocketLayoutState {
-            inputs: vec![],
-            outputs: vec![],
-        };
+        let mut socket_layout_state = self
+            .socket_state
+            .lock()
+            .expect("should be able to lock socket state mutex in layout()");
+        socket_layout_state.clear();
 
         for node in &self.content {
             let mut node = node.as_scalable_widget().layout(
@@ -216,8 +283,121 @@ where
     ) -> event::Status {
         let mut status = event::Status::Ignored;
         let mut state = tree.state.downcast_mut::<GraphContainerState>();
+        let socket_state = self
+            .socket_state
+            .lock()
+            .expect("should be able to lock socket state mutex in on_event()");
+
+        // Socket-related processing
+        if let Event::Mouse(mouse_event) = event {
+            if let Some(cursor_position) = cursor.position() {
+                let offset = self.matrix.get_translation();
+                let translated_cursor_position =
+                    Point::new(cursor_position.x - offset.0, cursor_position.y - offset.1);
+
+                let scale = self.matrix.get_scale();
+                let translated_descaled_cursor_position = Point::new(
+                    translated_cursor_position.x / scale,
+                    translated_cursor_position.y / scale,
+                );
+
+                // Find the socket we're hovering over
+                let mut hovered_socket: Option<LogicalEndpoint> = None;
+                for (role, node_sockets) in [
+                    (SocketRole::In, &socket_state.inputs),
+                    (SocketRole::Out, &socket_state.outputs),
+                ] {
+                    for (node_index, sockets) in node_sockets.iter().enumerate() {
+                        for (socket_index, blob_rect) in sockets.iter().enumerate() {
+                            if blob_rect.contains(translated_cursor_position) {
+                                hovered_socket = Some(LogicalEndpoint {
+                                    node_index,
+                                    role,
+                                    socket_index,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                match mouse_event {
+                    mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                        if let Some(hovered_socket) = hovered_socket {
+                            match hovered_socket.role {
+                                SocketRole::In => {
+                                    // The primary intent of dragging from an input socket is
+                                    // removing the connection to the previous node.
+                                    // The crate user may still desire to implement a Blender-like
+                                    // behaviour where it drags out a new connection
+                                    if let Some(f) = &self.on_disconnect {
+                                        shell.publish(f(
+                                            hovered_socket,
+                                            translated_descaled_cursor_position,
+                                        ));
+                                    }
+                                }
+                                SocketRole::Out => {
+                                    // Create a new dangling connection from the output socket
+                                    self.try_emit_dangling(
+                                        shell,
+                                        translated_descaled_cursor_position,
+                                        hovered_socket,
+                                    );
+                                }
+                            }
+                            status = event::Status::Captured;
+                        }
+                    }
+                    mouse::Event::CursorMoved { .. } => {
+                        // Update the existing dangling connection, if it exists
+                        if let Some(dangling_source) = self.dangling_source {
+                            self.try_emit_dangling(
+                                shell,
+                                translated_descaled_cursor_position,
+                                dangling_source,
+                            );
+                            status = event::Status::Captured;
+                        }
+                    }
+                    mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                        if let Some(dangling_source) = self.dangling_source {
+                            // No matter what happens, the dangling connection needs to be removed
+                            if let Some(f) = &self.on_dangling {
+                                shell.publish(f(None));
+                            }
+
+                            // If we're hovering over a socket while releasing the button,
+                            // there's a chance we're about to make a connection
+                            if let Some(hovered_socket) = hovered_socket {
+                                // Don't allow connecting input to input or output to output
+                                // sockets, and don't allow connecting a node to itself.
+                                // This does not definitively detect cycles, but it's a start
+                                if dangling_source.role != hovered_socket.role
+                                    && dangling_source.node_index != hovered_socket.node_index
+                                {
+                                    if let Some(f) = &self.on_connect {
+                                        let link = Link::from_unordered(
+                                            Endpoint::Socket(dangling_source),
+                                            Endpoint::Socket(hovered_socket),
+                                        );
+                                        shell.publish(f(link));
+                                    }
+                                }
+                            }
+                            status = event::Status::Captured;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if status == event::Status::Captured {
+            return status;
+        }
 
         if let Some(start) = state.drag_start_position {
+            // Moving the viewport
             if let Some(cursor_position) = cursor.position() {
                 match event {
                     Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
@@ -236,6 +416,7 @@ where
                 }
             }
         } else {
+            // Child events
             status = self
                 .content
                 .iter_mut()
@@ -258,6 +439,7 @@ where
 
         if status == event::Status::Ignored {
             if let Some(cursor_position) = cursor.position() {
+                // Initiating viewport movement/scaling
                 match event {
                     Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                         state.drag_start_position = Some(cursor_position);
