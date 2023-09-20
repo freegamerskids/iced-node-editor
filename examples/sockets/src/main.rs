@@ -1,6 +1,8 @@
 use iced::widget::{container, text};
 use iced::{Color, Element, Length, Padding, Point, Sandbox, Settings};
-use iced_node_editor::{connection, graph_container, node, Matrix, Socket, SocketRole, SocketSide};
+use iced_node_editor::{
+    connection, graph_container, node, Connection, Endpoint, Matrix, Socket, SocketRole, SocketSide,
+};
 
 pub fn main() -> iced::Result {
     // To resize the the resulting canvas for web: https://github.com/iced-rs/iced/issues/1265
@@ -149,15 +151,9 @@ impl Sandbox for Example {
 
         for (_i, c) in self.connections.iter().enumerate() {
             graph_content.push(
-                connection(
-                    Point::new(
-                        self.nodes[c.0].position.x + 200.0,
-                        self.nodes[c.0].position.y + 37.5,
-                    ),
-                    Point::new(
-                        self.nodes[c.1].position.x,
-                        self.nodes[c.1].position.y + 37.5,
-                    ),
+                Connection::new(
+                    Endpoint::Socket(c.0, SocketRole::Out, 0),
+                    Endpoint::Socket(c.1, SocketRole::In, 0),
                 )
                 .into(),
             );

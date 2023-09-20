@@ -46,26 +46,28 @@ pub struct Socket<'a, Message, Renderer> {
 }
 
 impl<'a, Message, Renderer> Socket<'a, Message, Renderer> {
-    pub fn blob_center(&self, node_bounds: Rectangle, socket_bounds: Rectangle) -> Point {
+    pub fn blob_center(&self, node_left: f32, node_width: f32, center_y: f32) -> Point {
         let x = match self.blob_side {
-            SocketSide::Left => node_bounds.x,
-            SocketSide::Right => node_bounds.x + node_bounds.width,
+            SocketSide::Left => node_left,
+            SocketSide::Right => node_left + node_width,
         };
-        let y = socket_bounds.center_y();
-        Point::new(x, y)
+        Point::new(x, center_y)
     }
 }
 
+#[derive(Debug)]
 pub enum SocketSide {
     Left,
     Right,
 }
 
+#[derive(Debug)]
 pub enum SocketRole {
     In,
     Out,
 }
 
+#[derive(Debug)]
 struct NodeState {
     drag_start_position: Option<Point>,
 }
@@ -224,6 +226,9 @@ where
 
         let mut children = vec![content];
 
+        let mut in_sockets: Vec<Point> = vec![];
+        let mut out_sockets: Vec<Point> = vec![];
+
         let mut socket_top: f32 = content_available_size.height;
         for socket in self.sockets.iter() {
             socket_top += self.socket_spacing * scale;
@@ -265,8 +270,21 @@ where
             socket_node.move_to(Point::new(self.padding.left, padding.top + socket_top));
             children.push(socket_node);
 
+            let blob_center = socket.blob_center(
+                0.0,
+                content_frame_size.width * scale,
+                padding.top + socket_top + socket_area_size_scaled.height / 2.0,
+            ) + (Vector::new(self.position.x, self.position.y) * scale);
+            match socket.role {
+                SocketRole::In => in_sockets.push(blob_center),
+                SocketRole::Out => out_sockets.push(blob_center),
+            }
+
             socket_top += socket_content_size_scaled.height;
         }
+
+        socket_state.inputs.push(in_sockets);
+        socket_state.outputs.push(out_sockets);
 
         let total_size = Size::new(
             content_frame_size.width * scale,
@@ -337,12 +355,6 @@ where
             .next()
             .expect("there should be a layout node for the graph node content");
 
-        println!(
-            "layout {:?} content_layout {:?}",
-            layout.bounds(),
-            content_layout.bounds()
-        );
-
         // Only draw node content if it would be sufficiently big
         if layout.bounds().width > content_layout.bounds().width
             && layout.bounds().height > content_layout.bounds().height
@@ -386,7 +398,8 @@ where
             }
 
             // Draw blob
-            let blob_center = socket.blob_center(bounds, socket_layout.bounds());
+            let blob_center =
+                socket.blob_center(bounds.x, bounds.width, socket_layout.bounds().center_y());
             let blob_bounds = Rectangle::new(
                 blob_center - Vector::new(socket.blob_radius, socket.blob_radius),
                 Size::new(socket.blob_radius * 2.0, socket.blob_radius * 2.0),

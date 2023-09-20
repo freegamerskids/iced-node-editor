@@ -8,6 +8,7 @@ use crate::{
     mesh_renderer::MeshRenderer,
     node_element::{GraphNodeElement, ScalableWidget},
     styles::connection::StyleSheet,
+    SocketRole,
 };
 
 pub struct Connection<Message, Renderer>
@@ -15,8 +16,8 @@ where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    from: Point,
-    to: Point,
+    from: Endpoint,
+    to: Endpoint,
     width: f32,
     number_of_segments: usize,
     style: <Renderer::Theme as StyleSheet>::Style,
@@ -30,7 +31,7 @@ where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    pub fn new(from: Point, to: Point) -> Self {
+    pub fn new(from: Endpoint, to: Endpoint) -> Self {
         Connection {
             spline: Mutex::new(Vec::new()),
             from,
@@ -58,7 +59,7 @@ where
     Renderer: renderer::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    Connection::new(from, to)
+    Connection::new(Endpoint::Absolute(from), Endpoint::Absolute(to))
 }
 
 impl<'a, Message, Renderer> ScalableWidget<Message, Renderer> for Connection<Message, Renderer>
@@ -74,9 +75,9 @@ where
         socket_state: &mut super::node_element::SocketLayoutState,
     ) -> iced::advanced::layout::Node {
         let spline = generate_spline(
-            Vector::new(self.from.x, self.from.y) * scale,
+            self.from.resolve(scale, &socket_state),
             1.0,
-            Vector::new(self.to.x, self.to.y) * scale,
+            self.to.resolve(scale, &socket_state),
             self.number_of_segments,
             1.0_f32,
         );
@@ -146,11 +147,23 @@ where
     }
 
     fn width(&self) -> Length {
-        Length::Fixed((self.from.x - self.to.x).abs() + self.width)
+        if let Endpoint::Absolute(from_point) = self.from {
+            if let Endpoint::Absolute(to_point) = self.to {
+                return Length::Fixed((from_point.x - to_point.x).abs() + self.width);
+            }
+        }
+
+        Length::Fill // TODO: does this work?
     }
 
     fn height(&self) -> Length {
-        Length::Fixed((self.from.y - self.to.y).abs() + self.width)
+        if let Endpoint::Absolute(from_point) = self.from {
+            if let Endpoint::Absolute(to_point) = self.to {
+                return Length::Fixed((from_point.y - to_point.y).abs() + self.width);
+            }
+        }
+
+        Length::Fill // TODO: does this work?
     }
 }
 
@@ -163,6 +176,28 @@ where
 {
     fn from(node: Connection<Message, Renderer>) -> Self {
         Self::new(node)
+    }
+}
+
+#[derive(Debug)]
+pub enum Endpoint {
+    Absolute(Point),
+    Socket(usize, SocketRole, usize),
+}
+
+impl Endpoint {
+    fn resolve(&self, scale: f32, socket_state: &super::node_element::SocketLayoutState) -> Vector {
+        match self {
+            Endpoint::Absolute(point) => Vector::new(point.x * scale, point.y * scale),
+            Endpoint::Socket(node_index, role, socket_index) => {
+                let node_sockets = match role {
+                    SocketRole::In => &socket_state.inputs,
+                    SocketRole::Out => &socket_state.outputs,
+                };
+                let point = node_sockets[*node_index][*socket_index];
+                Vector::new(point.x, point.y)
+            }
+        }
     }
 }
 

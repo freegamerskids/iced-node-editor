@@ -12,6 +12,8 @@ pub use connection::connection;
 pub use graph_container::graph_container;
 pub use node::node;
 
+pub use connection::Connection;
+pub use connection::Endpoint;
 pub use graph_container::GraphContainer;
 pub use node::Node;
 pub use node::Socket;
