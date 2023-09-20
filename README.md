@@ -1,17 +1,3 @@
-# Iced node editor
+# Iced node editor with sockets
 
-A node editor for [Iced](https://github.com/iced-rs/iced) GUI library. Supports iced_native renderer.
-
-![Example](./media/screenshot.PNG)
-
-## Features
-
-- [x] Nodes
-- [x] Connections
-- [x] Panning
-- [x] Zooming
-- [x] Dragging nodes
-
-## Usage
-
-For examples please visit the [examples](./examples) directory.
+Adds sockets and draggable connections to [iced-node-editor](https://github.com/mkmarek/iced-node-editor). Made with [samaku](https://github.com/meew0/samaku) in mind but should be usable generally, see `examples/sockets` for an example.
