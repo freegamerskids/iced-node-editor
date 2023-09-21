@@ -316,6 +316,10 @@ where
         tree.diff_children(std::slice::from_ref(&self.content))
     }
 
+    fn tag(&self) -> widget::tree::Tag {
+        widget::tree::Tag::of::<widget::tree::State>()
+    }
+
     fn state(&self) -> widget::tree::State {
         widget::tree::State::new(NodeState {
             drag_start_position: None,
