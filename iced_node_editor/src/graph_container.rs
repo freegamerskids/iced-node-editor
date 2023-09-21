@@ -424,7 +424,7 @@ where
             // So to match the intuitive expectation that events for the topmost node are processed
             // first, such that for example dragging a stack of nodes will only move the topmost
             // one, we need to reverse the direction.
-            let mut event_queue: VecDeque<_> = self
+            let event_queue: VecDeque<_> = self
                 .content
                 .iter_mut()
                 .zip(&mut tree.children)
