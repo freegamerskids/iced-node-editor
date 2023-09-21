@@ -54,6 +54,11 @@ where
         self.number_of_segments = number_of_segments;
         self
     }
+
+    pub fn style(mut self, style: <Renderer::Theme as StyleSheet>::Style) -> Self {
+        self.style = style;
+        self
+    }
 }
 
 pub fn connection<Message, Renderer>(from: Point, to: Point) -> Connection<Message, Renderer>
