@@ -7,6 +7,7 @@ use iced::{
     },
     event, mouse, Background, Color, Element, Event, Length, Point, Rectangle, Size, Vector,
 };
+use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use crate::connection::LogicalEndpoint;
@@ -416,25 +417,35 @@ where
                 }
             }
         } else {
-            // Child events
-            status = self
+            // Process events for our children (i.e. nodes), until one of the children
+            // captures the event.
+            // We process these in reverse storage order, as they are drawn in forward order,
+            // and the last element in `content` is drawn on top.
+            // So to match the intuitive expectation that events for the topmost node are processed
+            // first, such that for example dragging a stack of nodes will only move the topmost
+            // one, we need to reverse the direction.
+            let mut event_queue: VecDeque<_> = self
                 .content
                 .iter_mut()
                 .zip(&mut tree.children)
                 .zip(layout.children())
-                .map(|((child, state), layout)| {
-                    child.as_widget_mut().on_event(
-                        state,
-                        event.clone(),
-                        layout,
-                        cursor,
-                        renderer,
-                        clipboard,
-                        shell,
-                        viewport,
-                    )
-                })
-                .fold(event::Status::Ignored, event::Status::merge);
+                .collect();
+            for ((child, state), layout) in event_queue.into_iter().rev() {
+                let child_status = child.as_widget_mut().on_event(
+                    state,
+                    event.clone(),
+                    layout,
+                    cursor,
+                    renderer,
+                    clipboard,
+                    shell,
+                    viewport,
+                );
+                status = status.merge(child_status);
+                if status == event::Status::Captured {
+                    break;
+                }
+            }
         }
 
         if status == event::Status::Ignored {
