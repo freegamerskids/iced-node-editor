@@ -1,4 +1,4 @@
-use iced::widget::{container, text};
+use iced::widget::{button, container, text};
 use iced::{Color, Element, Length, Padding, Point, Sandbox, Settings};
 use iced_node_editor::{
     graph_container, node, Connection, Endpoint, GraphNodeElement, Link, LogicalEndpoint, Matrix,
@@ -40,6 +40,7 @@ pub fn main() -> iced::Result {
 struct NodeState {
     position: Point,
     text: String,
+    button: bool,
     sockets: (Vec<SocketType>, Vec<SocketType>),
 }
 
@@ -50,6 +51,7 @@ struct NodeState {
 enum SocketType {
     BlueSquare,
     RedCircle,
+    Button,
 }
 
 struct Example {
@@ -86,6 +88,7 @@ enum Message {
     Connect(Link),
     Disconnect(LogicalEndpoint, Point),
     Dangling(Option<(LogicalEndpoint, Link)>),
+    ButtonPressed,
 }
 
 impl Sandbox for Example {
@@ -103,21 +106,28 @@ impl Sandbox for Example {
                 NodeState {
                     position: Point::new(0.0, 0.0),
                     text: String::from("Iced"),
+                    button: false,
                     sockets: (vec![], vec![SocketType::BlueSquare, SocketType::RedCircle]),
                 },
                 // Node #1
                 NodeState {
                     position: Point::new(250.0, 250.0),
                     text: String::from("Node"),
+                    button: false,
                     sockets: (
                         vec![SocketType::RedCircle],
-                        vec![SocketType::RedCircle, SocketType::BlueSquare],
+                        vec![
+                            SocketType::RedCircle,
+                            SocketType::BlueSquare,
+                            SocketType::Button,
+                        ],
                     ),
                 },
                 // Node #2
                 NodeState {
                     position: Point::new(500.0, 250.0),
                     text: String::from("Editor"),
+                    button: true,
                     sockets: (vec![SocketType::BlueSquare, SocketType::RedCircle], vec![]),
                 },
             ],
@@ -206,6 +216,7 @@ impl Sandbox for Example {
                 self.dangling_source = None;
                 self.dangling_connection = None;
             }
+            Message::ButtonPressed => println!("Button was pressed."),
         }
     }
 
@@ -225,9 +236,17 @@ impl Sandbox for Example {
                 }
             }
 
-            graph_content.push(
+            let node = if n.button {
+                node(iced::widget::column![
+                    text(&n.text),
+                    button("Button").on_press(Message::ButtonPressed)
+                ])
+            } else {
                 node(text(&n.text))
-                    .padding(Padding::from(10.0))
+            };
+
+            graph_content.push(
+                node.padding(Padding::from(10.0))
                     .sockets(node_sockets)
                     .center_x()
                     .center_y()
@@ -286,14 +305,10 @@ impl Sandbox for Example {
     }
 }
 
-fn make_socket<'a, Message, Renderer>(
+fn make_socket<'a>(
     role: SocketRole,
     socket_type: &SocketType,
-) -> Socket<'a, Message, Renderer>
-where
-    Renderer: iced::advanced::text::Renderer + 'a,
-    Renderer::Theme: text::StyleSheet,
-{
+) -> Socket<'a, Message, iced::Renderer> {
     // With this, we determine that the input sockets should be on the left side of a node
     // and the output sockets on the right side. The opposite would be possible as well,
     // as would a more complex arrangement where some input and output sockets are on the same side.
@@ -316,9 +331,22 @@ where
 
     // The style of the blob is not determined by a style sheet, but by properties of the `Socket`
     // itself.
-    let (blob_border_radius, blob_color, label) = match socket_type {
-        SocketType::BlueSquare => (0.0, Color::from_rgb(0.0, 0.1, 0.8), "Blue square"),
-        SocketType::RedCircle => (BLOB_RADIUS, Color::from_rgb(0.8, 0.1, 0.0), "Red circle"),
+    let (blob_border_radius, blob_color, content) = match socket_type {
+        SocketType::BlueSquare => (
+            0.0,
+            Color::from_rgb(0.0, 0.1, 0.8),
+            text("Blue square").into(),
+        ),
+        SocketType::RedCircle => (
+            BLOB_RADIUS,
+            Color::from_rgb(0.8, 0.1, 0.0),
+            text("Red circle").into(),
+        ),
+        SocketType::Button => (
+            BLOB_RADIUS,
+            Color::from_rgb(0.3, 0.3, 0.3),
+            button("Button").on_press(Message::ButtonPressed).into(),
+        ),
     };
 
     Socket {
@@ -329,7 +357,7 @@ where
         blob_radius: BLOB_RADIUS,
         blob_border_radius,
         blob_color,
-        content: text(label).into(), // Arbitrary widgets can be used here.
+        content, // Arbitrary widgets can be used here.
 
         min_height: 0.0,
         max_height: f32::INFINITY,

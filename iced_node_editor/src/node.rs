@@ -309,11 +309,19 @@ where
     Renderer::Theme: StyleSheet,
 {
     fn children(&self) -> Vec<widget::Tree> {
-        vec![widget::Tree::new(&self.content)]
+        let mut res = vec![widget::Tree::new(&self.content)];
+        for socket in &self.sockets {
+            res.push(widget::Tree::new(&socket.content));
+        }
+        res
     }
 
     fn diff(&self, tree: &mut widget::Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content))
+        let mut new_children: Vec<&dyn Widget<Message, Renderer>> = vec![self.content.as_widget()];
+        for socket in &self.sockets {
+            new_children.push(socket.content.as_widget());
+        }
+        tree.diff_children(new_children.as_slice())
     }
 
     fn tag(&self) -> widget::tree::Tag {
@@ -371,7 +379,7 @@ where
             && layout.bounds().height > content_layout.bounds().height
         {
             self.content.as_widget().draw(
-                tree,
+                &tree.children[0],
                 renderer,
                 theme,
                 &renderer::Style {
@@ -396,7 +404,7 @@ where
                 && (socket_layout.bounds().height * 2.0) > child_layout.bounds().height
             {
                 socket.content.as_widget().draw(
-                    tree,
+                    &tree.children[socket_index + 1],
                     renderer,
                     theme,
                     &renderer::Style {
@@ -455,16 +463,38 @@ where
                     _ => {}
                 }
             } else {
+                let mut layout_children_iter = layout.children();
+                let content_layout = layout_children_iter
+                    .next()
+                    .expect("there should be a layout node for the graph node content");
+
                 status = self.content.as_widget_mut().on_event(
                     &mut tree.children[0],
                     event.clone(),
-                    layout,
+                    content_layout,
                     cursor,
                     renderer,
                     clipboard,
                     shell,
                     viewport,
-                )
+                );
+
+                for (socket_index, socket_layout) in layout_children_iter.enumerate() {
+                    if status == event::Status::Captured {
+                        break;
+                    }
+
+                    status = self.sockets[socket_index].content.as_widget_mut().on_event(
+                        &mut tree.children[socket_index + 1],
+                        event.clone(),
+                        socket_layout,
+                        cursor,
+                        renderer,
+                        clipboard,
+                        shell,
+                        viewport,
+                    );
+                }
             }
         }
 
