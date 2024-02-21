@@ -88,7 +88,7 @@ where
     Renderer: renderer::Renderer,
 {
     fn borrow(&self) -> &(dyn Widget<Message, Renderer> + 'a) {
-        self.widget.as_widget().borrow()
+        self.widget.as_widget()
     }
 }
 
@@ -98,6 +98,6 @@ where
     Renderer: renderer::Renderer,
 {
     fn borrow(&self) -> &(dyn Widget<Message, Renderer> + 'a) {
-        self.widget.as_widget().borrow()
+        self.widget.as_widget()
     }
 }

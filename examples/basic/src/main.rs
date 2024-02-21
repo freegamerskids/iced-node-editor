@@ -118,16 +118,16 @@ impl Sandbox for Example {
             );
         }
 
-        for (_i, c) in self.connections.iter().enumerate() {
+        for (from_index, to_index) in self.connections.iter() {
             graph_content.push(
                 connection(
                     Point::new(
-                        self.nodes[c.0].position.x + 200.0,
-                        self.nodes[c.0].position.y + 37.5,
+                        self.nodes[*from_index].position.x + 200.0,
+                        self.nodes[*from_index].position.y + 37.5,
                     ),
                     Point::new(
-                        self.nodes[c.1].position.x,
-                        self.nodes[c.1].position.y + 37.5,
+                        self.nodes[*to_index].position.x,
+                        self.nodes[*to_index].position.y + 37.5,
                     ),
                 )
                 .into(),

@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 mod connection;
 mod graph_container;
 mod matrix;
