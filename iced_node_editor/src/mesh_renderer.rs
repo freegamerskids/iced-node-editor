@@ -5,7 +5,7 @@ pub trait MeshRenderer {
     fn draw_buffers(&mut self, buffers: Indexed<SolidVertex2D>);
 }
 
-impl<Theme> MeshRenderer for iced::Renderer<Theme> {
+impl MeshRenderer for iced::Renderer {
     fn draw_buffers(&mut self, buffers: Indexed<SolidVertex2D>) {
         let min = buffers
             .vertices

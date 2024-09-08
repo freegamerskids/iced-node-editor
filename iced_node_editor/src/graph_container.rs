@@ -1,11 +1,11 @@
 use iced::{
     advanced::{
-        layout,
-        renderer::{self},
+        layout, renderer,
         widget::{self, Operation},
         Clipboard, Layout, Shell, Widget,
     },
-    event, mouse, Background, Color, Element, Event, Length, Point, Rectangle, Size, Vector,
+    event, mouse, Background, Border, Color, Element, Event, Length, Point, Rectangle, Size,
+    Vector,
 };
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -18,17 +18,17 @@ use crate::{
     Endpoint, GraphNodeElement, Link, SocketRole,
 };
 
-pub struct GraphContainer<'a, Message, Renderer>
+pub struct GraphContainer<'a, Message, Theme, Renderer>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
     width: Length,
     height: Length,
     max_width: f32,
     max_height: f32,
-    style: <Renderer::Theme as StyleSheet>::Style,
-    content: Vec<GraphNodeElement<'a, Message, Renderer>>,
+    style: Theme::Style,
+    content: Vec<GraphNodeElement<'a, Message, Theme, Renderer>>,
     matrix: Matrix,
     on_translate: Option<Box<dyn Fn((f32, f32)) -> Message + 'a>>,
     on_scale: Option<Box<dyn Fn(f32, f32, f32) -> Message + 'a>>,
@@ -45,12 +45,12 @@ struct GraphContainerState {
     drag_start_position: Option<Point>,
 }
 
-impl<'a, Message, Renderer> GraphContainer<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> GraphContainer<'a, Message, Theme, Renderer>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
-    pub fn new(content: Vec<GraphNodeElement<'a, Message, Renderer>>) -> Self {
+    pub fn new(content: Vec<GraphNodeElement<'a, Message, Theme, Renderer>>) -> Self {
         GraphContainer {
             on_translate: None,
             on_scale: None,
@@ -140,7 +140,7 @@ where
         self
     }
 
-    pub fn style(mut self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
+    pub fn style(mut self, style: impl Into<Theme::Style>) -> Self {
         self.style = style.into();
         self
     }
@@ -168,20 +168,21 @@ where
     }
 }
 
-pub fn graph_container<Message, Renderer>(
-    content: Vec<GraphNodeElement<Message, Renderer>>,
-) -> GraphContainer<Message, Renderer>
+pub fn graph_container<Message, Theme, Renderer>(
+    content: Vec<GraphNodeElement<Message, Theme, Renderer>>,
+) -> GraphContainer<Message, Theme, Renderer>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
     GraphContainer::new(content)
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for GraphContainer<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for GraphContainer<'a, Message, Theme, Renderer>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
     fn children(&self) -> Vec<widget::Tree> {
         let mut children = Vec::new();
@@ -197,12 +198,11 @@ where
         tree.diff_children(self.content.as_slice())
     }
 
-    fn width(&self) -> Length {
-        self.width
-    }
-
-    fn height(&self) -> Length {
-        self.height
+    fn size(&self) -> Size<Length> {
+        Size {
+            width: self.width,
+            height: self.height,
+        }
     }
 
     fn tag(&self) -> widget::tree::Tag {
@@ -215,7 +215,12 @@ where
         })
     }
 
-    fn layout(&self, _renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut widget::Tree,
+        _renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let limits = limits
             .loose()
             .max_width(self.max_width)
@@ -234,8 +239,9 @@ where
             .expect("should be able to lock socket state mutex in layout()");
         socket_layout_state.clear();
 
-        for node in &self.content {
+        for (node_index, node) in self.content.iter().enumerate() {
             let mut node = node.as_scalable_widget().layout(
+                &mut tree.children[node_index],
                 _renderer,
                 &limits,
                 scale,
@@ -246,7 +252,7 @@ where
             content.push(node);
         }
 
-        let size = limits.resolve(Size::ZERO);
+        let size = limits.resolve(self.width, self.height, Size::ZERO);
 
         layout::Node::with_children(size, content)
     }
@@ -504,7 +510,7 @@ where
         &self,
         state: &widget::Tree,
         renderer: &mut Renderer,
-        theme: &Renderer::Theme,
+        theme: &Theme,
         renderer_style: &renderer::Style,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
@@ -589,14 +595,14 @@ where
     }
 }
 
-impl<'a, Message, Renderer> From<GraphContainer<'a, Message, Renderer>>
-    for Element<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> From<GraphContainer<'a, Message, Theme, Renderer>>
+    for Element<'a, Message, Theme, Renderer>
 where
     Message: 'a,
+    Theme: StyleSheet + 'a,
     Renderer: renderer::Renderer + 'a,
-    Renderer::Theme: StyleSheet,
 {
-    fn from(graph_container: GraphContainer<'a, Message, Renderer>) -> Self {
+    fn from(graph_container: GraphContainer<'a, Message, Theme, Renderer>) -> Self {
         Self::new(graph_container)
     }
 }
@@ -608,9 +614,12 @@ where
     renderer.fill_quad(
         renderer::Quad {
             bounds,
-            border_radius: [0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32].into(),
-            border_width: 0.0_f32,
-            border_color: Color::BLACK,
+            border: Border {
+                color: Color::BLACK,
+                width: 0.0_f32,
+                radius: [0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32].into(),
+            },
+            ..renderer::Quad::default()
         },
         style
             .background
@@ -658,9 +667,12 @@ fn draw_guidelines<Renderer>(
                     width: 1.0_f32,
                     height: bounds.height,
                 },
-                border_radius: [0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32].into(),
-                border_width: 0.0_f32,
-                border_color: Color::BLACK,
+                border: Border {
+                    color: Color::BLACK,
+                    width: 0.0_f32,
+                    radius: [0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32].into(),
+                },
+                ..renderer::Quad::default()
             },
             Background::Color(color),
         );
@@ -686,9 +698,12 @@ fn draw_guidelines<Renderer>(
                     width: bounds.width,
                     height: 1.0_f32,
                 },
-                border_radius: [0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32].into(),
-                border_width: 0.0_f32,
-                border_color: Color::BLACK,
+                border: Border {
+                    color: Color::BLACK,
+                    width: 0.0_f32,
+                    radius: [0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32].into(),
+                },
+                ..renderer::Quad::default()
             },
             Background::Color(color),
         );

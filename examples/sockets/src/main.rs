@@ -28,7 +28,10 @@ pub fn main() -> iced::Result {
     #[cfg(not(target_arch = "wasm32"))]
     Example::run(Settings {
         window: iced::window::Settings {
-            size: (800, 600),
+            size: iced::Size {
+                width: 800.0,
+                height: 600.0,
+            },
             ..Default::default()
         },
         ..Default::default()
@@ -151,7 +154,7 @@ impl Sandbox for Example {
                 self.matrix = self
                     .matrix
                     .translate(-x, -y)
-                    .scale(if scale > 0.0 { 1.2 } else { 1.0 / 1.2 })
+                    .scale(if scale > 0.0 { 1.05 } else { 1.0 / 1.05 })
                     .translate(x, y);
             }
             Message::TranslationChanged(x, y) => self.matrix = self.matrix.translate(x, y),
@@ -221,7 +224,7 @@ impl Sandbox for Example {
     }
 
     fn view(&self) -> Element<Message> {
-        let mut graph_content: Vec<GraphNodeElement<Message, _>> = vec![];
+        let mut graph_content: Vec<GraphNodeElement<Message, _, _>> = vec![];
 
         // Convert our own node representations into widgets
         for (i, n) in self.nodes.iter().enumerate() {
@@ -308,7 +311,7 @@ impl Sandbox for Example {
 fn make_socket<'a>(
     role: SocketRole,
     socket_type: &SocketType,
-) -> Socket<'a, Message, iced::Renderer> {
+) -> Socket<'a, Message, iced::Theme, iced::Renderer> {
     // With this, we determine that the input sockets should be on the left side of a node
     // and the output sockets on the right side. The opposite would be possible as well,
     // as would a more complex arrangement where some input and output sockets are on the same side.

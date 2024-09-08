@@ -1,7 +1,8 @@
+use iced::advanced::widget::Tree;
 use iced::advanced::{renderer, widget, Clipboard, Layout, Shell, Widget};
 use iced::{
-    alignment, event, mouse, Alignment, Background, Color, Element, Event, Length, Padding, Pixels,
-    Point, Rectangle, Size, Vector,
+    alignment, event, mouse, Alignment, Background, Border, Color, Element, Event, Length, Padding,
+    Pixels, Point, Rectangle, Size, Vector,
 };
 
 use crate::{
@@ -9,19 +10,19 @@ use crate::{
     styles::node::StyleSheet,
 };
 
-pub struct Node<'a, Message, Renderer>
+pub struct Node<'a, Message, Theme, Renderer>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
     width: Length,
     height: Length,
     max_width: f32,
     max_height: f32,
     padding: Padding,
-    style: <Renderer::Theme as StyleSheet>::Style,
-    content: Element<'a, Message, Renderer>,
-    sockets: Vec<Socket<'a, Message, Renderer>>,
+    style: Theme::Style,
+    content: Element<'a, Message, Theme, Renderer>,
+    sockets: Vec<Socket<'a, Message, Theme, Renderer>>,
     socket_spacing: f32,
     position: Point,
     horizontal_alignment: alignment::Horizontal,
@@ -29,7 +30,7 @@ where
     on_translate: Option<Box<dyn Fn((f32, f32)) -> Message + 'a>>,
 }
 
-pub struct Socket<'a, Message, Renderer> {
+pub struct Socket<'a, Message, Theme, Renderer> {
     pub role: SocketRole,
 
     pub min_height: f32,
@@ -41,11 +42,11 @@ pub struct Socket<'a, Message, Renderer> {
     pub blob_color: Color,
     pub blob_border_color: Option<Color>,
 
-    pub content: Element<'a, Message, Renderer>,
+    pub content: Element<'a, Message, Theme, Renderer>,
     pub content_alignment: alignment::Horizontal,
 }
 
-impl<'a, Message, Renderer> Socket<'a, Message, Renderer> {
+impl<'a, Message, Theme, Renderer> Socket<'a, Message, Theme, Renderer> {
     pub fn blob_rect(&self, node_left: f32, node_width: f32, center_y: f32) -> Rectangle {
         let x = match self.blob_side {
             SocketSide::Left => node_left,
@@ -75,14 +76,14 @@ struct NodeState {
     drag_start_position: Option<Point>,
 }
 
-impl<'a, Message, Renderer> Node<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> Node<'a, Message, Theme, Renderer>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
     pub fn new<T>(content: T) -> Self
     where
-        T: Into<Element<'a, Message, Renderer>>,
+        T: Into<Element<'a, Message, Theme, Renderer>>,
     {
         Node {
             width: Length::Shrink,
@@ -139,7 +140,7 @@ where
         self
     }
 
-    pub fn style(mut self, style: impl Into<<Renderer::Theme as StyleSheet>::Style>) -> Self {
+    pub fn style(mut self, style: impl Into<Theme::Style>) -> Self {
         self.style = style.into();
         self
     }
@@ -164,7 +165,7 @@ where
         self
     }
 
-    pub fn sockets(mut self, sockets: Vec<Socket<'a, Message, Renderer>>) -> Self {
+    pub fn sockets(mut self, sockets: Vec<Socket<'a, Message, Theme, Renderer>>) -> Self {
         self.sockets = sockets;
         self
     }
@@ -175,23 +176,25 @@ where
     }
 }
 
-pub fn node<'a, Message, Renderer>(
-    content: impl Into<Element<'a, Message, Renderer>>,
-) -> Node<'a, Message, Renderer>
+pub fn node<'a, Message, Theme, Renderer>(
+    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+) -> Node<'a, Message, Theme, Renderer>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
     Node::new(content)
 }
 
-impl<'a, Message, Renderer> ScalableWidget<Message, Renderer> for Node<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> ScalableWidget<Message, Renderer>
+    for Node<'a, Message, Theme, Renderer>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
     fn layout(
         &self,
+        tree: &mut widget::Tree,
         renderer: &Renderer,
         limits: &iced::advanced::layout::Limits,
         scale: f32,
@@ -208,15 +211,16 @@ where
             .width(self.width)
             .height(self.height);
 
-        let mut content = self
-            .content
-            .as_widget()
-            .layout(renderer, &limits.pad(self.padding).loose());
+        let mut content = self.content.as_widget().layout(
+            &mut tree.children[0],
+            renderer,
+            &limits.shrink(self.padding).loose(),
+        );
 
         let content_intrinsic_size = content.size();
         let padding = self.padding.fit(content_intrinsic_size, limits.max());
 
-        let content_frame_size = limits.resolve(content.size());
+        let content_frame_size = limits.resolve(self.width, self.height, content.size());
 
         let content_available_width =
             content_frame_size.width * scale - padding.left - padding.right;
@@ -224,8 +228,8 @@ where
             content_frame_size.height * scale - padding.top - padding.bottom;
         let content_available_size = Size::new(content_available_width, content_available_height);
 
-        content.move_to(Point::new(padding.left, padding.top));
-        content.align(
+        content.move_to_mut(Point::new(padding.left, padding.top));
+        content.align_mut(
             Alignment::from(self.horizontal_alignment),
             Alignment::from(self.vertical_alignment),
             content_available_size,
@@ -237,7 +241,7 @@ where
         let mut out_sockets: Vec<Rectangle> = vec![];
 
         let mut socket_top: f32 = content_available_size.height;
-        for socket in self.sockets.iter() {
+        for (socket_index, socket) in self.sockets.iter().enumerate() {
             socket_top += self.socket_spacing * scale;
 
             let socket_content_available_width =
@@ -254,7 +258,11 @@ where
                 },
             );
 
-            let mut socket_content = socket.content.as_widget().layout(renderer, &socket_limits);
+            let mut socket_content = socket.content.as_widget().layout(
+                &mut tree.children[socket_index + 1],
+                renderer,
+                &socket_limits,
+            );
 
             let socket_content_size_scaled = Size::new(
                 socket_content.size().width * scale,
@@ -264,7 +272,7 @@ where
                 content_available_size.width,
                 socket_content_size_scaled.height,
             );
-            socket_content.align(
+            socket_content.align_mut(
                 Alignment::from(socket.content_alignment),
                 Alignment::Center,
                 socket_area_size_scaled,
@@ -274,7 +282,7 @@ where
                 socket_area_size_scaled,
                 vec![socket_content],
             );
-            socket_node.move_to(Point::new(self.padding.left, padding.top + socket_top));
+            socket_node.move_to_mut(Point::new(self.padding.left, padding.top + socket_top));
             children.push(socket_node);
 
             let blob_rect = socket.blob_rect(
@@ -303,10 +311,11 @@ where
     }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for Node<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for Node<'a, Message, Theme, Renderer>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
     fn children(&self) -> Vec<widget::Tree> {
         let mut res = vec![widget::Tree::new(&self.content)];
@@ -317,7 +326,8 @@ where
     }
 
     fn diff(&self, tree: &mut widget::Tree) {
-        let mut new_children: Vec<&dyn Widget<Message, Renderer>> = vec![self.content.as_widget()];
+        let mut new_children: Vec<&dyn Widget<Message, Theme, Renderer>> =
+            vec![self.content.as_widget()];
         for socket in &self.sockets {
             new_children.push(socket.content.as_widget());
         }
@@ -336,6 +346,7 @@ where
 
     fn layout(
         &self,
+        _tree: &mut Tree,
         _renderer: &Renderer,
         _limits: &iced::advanced::layout::Limits,
     ) -> iced::advanced::layout::Node {
@@ -346,7 +357,7 @@ where
         &self,
         tree: &widget::Tree,
         renderer: &mut Renderer,
-        theme: &<Renderer as iced::advanced::Renderer>::Theme,
+        theme: &Theme,
         renderer_style: &renderer::Style,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
@@ -359,9 +370,12 @@ where
             renderer.fill_quad(
                 renderer::Quad {
                     bounds,
-                    border_radius: style.border_radius.into(),
-                    border_width: style.border_width,
-                    border_color: style.border_color,
+                    border: Border {
+                        color: style.border_color,
+                        width: style.border_width,
+                        radius: style.border_radius.into(),
+                    },
+                    ..renderer::Quad::default()
                 },
                 style
                     .background
@@ -422,9 +436,12 @@ where
             renderer.fill_quad(
                 renderer::Quad {
                     bounds: blob_rect,
-                    border_radius: socket.blob_border_radius.into(),
-                    border_width: style.border_width,
-                    border_color: socket.blob_border_color.unwrap_or(style.border_color),
+                    border: Border {
+                        color: socket.blob_border_color.unwrap_or(style.border_color),
+                        width: style.border_width,
+                        radius: socket.blob_border_radius.into(),
+                    },
+                    ..renderer::Quad::default()
                 },
                 Background::Color(socket.blob_color),
             );
@@ -527,23 +544,22 @@ where
         )
     }
 
-    fn width(&self) -> Length {
-        self.width
-    }
-
-    fn height(&self) -> Length {
-        self.height
+    fn size(&self) -> Size<Length> {
+        Size {
+            width: self.width,
+            height: self.height,
+        }
     }
 }
 
-impl<'a, Message, Renderer> From<Node<'a, Message, Renderer>>
-    for GraphNodeElement<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> From<Node<'a, Message, Theme, Renderer>>
+    for GraphNodeElement<'a, Message, Theme, Renderer>
 where
     Message: 'a,
+    Theme: StyleSheet + 'a,
     Renderer: renderer::Renderer + 'a,
-    Renderer::Theme: StyleSheet,
 {
-    fn from(node: Node<'a, Message, Renderer>) -> Self {
+    fn from(node: Node<'a, Message, Theme, Renderer>) -> Self {
         Self::new(node)
     }
 }

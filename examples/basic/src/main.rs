@@ -24,7 +24,10 @@ pub fn main() -> iced::Result {
     #[cfg(not(target_arch = "wasm32"))]
     Example::run(Settings {
         window: iced::window::Settings {
-            size: (800, 600),
+            size: iced::Size {
+                width: 800.0,
+                height: 600.0,
+            },
             ..Default::default()
         },
         ..Default::default()

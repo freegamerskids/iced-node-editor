@@ -2,6 +2,7 @@ use std::sync::Mutex;
 
 use iced::advanced::graphics::mesh::{Indexed, SolidVertex2D};
 use iced::advanced::renderer;
+use iced::advanced::widget::Tree;
 use iced::{advanced::Widget, Length, Point, Size, Vector};
 
 use crate::{
@@ -11,24 +12,22 @@ use crate::{
     SocketRole,
 };
 
-pub struct Connection<Message, Renderer>
+pub struct Connection<Message, Theme>
 where
-    Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
+    Theme: StyleSheet,
 {
     link: Link,
     width: f32,
     number_of_segments: usize,
-    style: <Renderer::Theme as StyleSheet>::Style,
+    style: Theme::Style,
 
     phantom_message: std::marker::PhantomData<Message>,
     spline: Mutex<Vec<Vector>>,
 }
 
-impl<Message, Renderer> Connection<Message, Renderer>
+impl<Message, Theme> Connection<Message, Theme>
 where
-    Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
+    Theme: StyleSheet,
 {
     pub fn new(link: Link) -> Self {
         Connection {
@@ -55,27 +54,27 @@ where
         self
     }
 
-    pub fn style(mut self, style: <Renderer::Theme as StyleSheet>::Style) -> Self {
+    pub fn style(mut self, style: Theme::Style) -> Self {
         self.style = style;
         self
     }
 }
 
-pub fn connection<Message, Renderer>(from: Point, to: Point) -> Connection<Message, Renderer>
+pub fn connection<Message, Theme>(from: Point, to: Point) -> Connection<Message, Theme>
 where
-    Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
+    Theme: StyleSheet,
 {
     Connection::between(Endpoint::Absolute(from), Endpoint::Absolute(to))
 }
 
-impl<Message, Renderer> ScalableWidget<Message, Renderer> for Connection<Message, Renderer>
+impl<Message, Theme, Renderer> ScalableWidget<Message, Renderer> for Connection<Message, Theme>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer,
-    Renderer::Theme: StyleSheet,
 {
     fn layout(
         &self,
+        _tree: &mut Tree,
         _renderer: &Renderer,
         _limits: &iced::advanced::layout::Limits,
         scale: f32,
@@ -112,13 +111,14 @@ where
     }
 }
 
-impl<Message, Renderer> Widget<Message, Renderer> for Connection<Message, Renderer>
+impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Connection<Message, Theme>
 where
+    Theme: StyleSheet,
     Renderer: renderer::Renderer + MeshRenderer,
-    Renderer::Theme: StyleSheet,
 {
     fn layout(
         &self,
+        _tree: &mut Tree,
         _renderer: &Renderer,
         _limits: &iced::advanced::layout::Limits,
     ) -> iced::advanced::layout::Node {
@@ -129,7 +129,7 @@ where
         &self,
         _tree: &iced::advanced::widget::Tree,
         renderer: &mut Renderer,
-        theme: &<Renderer as iced::advanced::Renderer>::Theme,
+        theme: &Theme,
         _renderer_style: &renderer::Style,
         layout: iced::advanced::Layout<'_>,
         _cursor: iced::mouse::Cursor,
@@ -157,35 +157,19 @@ where
         });
     }
 
-    fn width(&self) -> Length {
-        if let Endpoint::Absolute(from_point) = self.link.start {
-            if let Endpoint::Absolute(to_point) = self.link.end {
-                return Length::Fixed((from_point.x - to_point.x).abs() + self.width);
-            }
-        }
-
-        Length::Fill // TODO: does this work?
-    }
-
-    fn height(&self) -> Length {
-        if let Endpoint::Absolute(from_point) = self.link.start {
-            if let Endpoint::Absolute(to_point) = self.link.end {
-                return Length::Fixed((from_point.y - to_point.y).abs() + self.width);
-            }
-        }
-
-        Length::Fill // TODO: does this work?
+    fn size(&self) -> Size<Length> {
+        todo!("This should never be called.");
     }
 }
 
-impl<'a, Message, Renderer> From<Connection<Message, Renderer>>
-    for GraphNodeElement<'a, Message, Renderer>
+impl<'a, Message, Theme, Renderer> From<Connection<Message, Theme>>
+    for GraphNodeElement<'a, Message, Theme, Renderer>
 where
     Message: 'a,
+    Theme: StyleSheet + 'a,
     Renderer: renderer::Renderer + MeshRenderer + 'a,
-    Renderer::Theme: StyleSheet,
 {
-    fn from(node: Connection<Message, Renderer>) -> Self {
+    fn from(node: Connection<Message, Theme>) -> Self {
         Self::new(node)
     }
 }
