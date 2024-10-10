@@ -1,5 +1,5 @@
 use iced::widget::{container, text};
-use iced::{Element, Length, Point, Sandbox, Settings};
+use iced::{Element, Length, Point};
 use iced_node_editor::{connection, graph_container, node, Matrix};
 
 pub fn main() -> iced::Result {
@@ -12,26 +12,21 @@ pub fn main() -> iced::Result {
             (window.inner_height().unwrap().as_f64().unwrap()) as u32,
         );
 
-        Example::run(Settings {
-            window: iced::window::Settings {
-                size: (width, height),
-                ..Default::default()
-            },
-            ..Default::default()
-        })?;
+        iced::application("Iced Graph Editor - Basic Example", Example::update, Example::view)
+            .theme(|_| iced::Theme::Dark)
+            .antialiasing(true)
+            .centered()
+            .window_size(iced::Size { width, height })
+            .run()?;
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    Example::run(Settings {
-        window: iced::window::Settings {
-            size: iced::Size {
-                width: 800.0,
-                height: 600.0,
-            },
-            ..Default::default()
-        },
-        ..Default::default()
-    })?;
+    iced::application("Iced Graph Editor - Basic Example", Example::update, Example::view)
+        .theme(|_| iced::Theme::Dark)
+        .antialiasing(true)
+        .centered()
+        .window_size(iced::Size { width: 800.0, height: 600.0 })
+        .run()?;
 
     Ok(())
 }
@@ -54,8 +49,7 @@ enum Message {
     MoveNode(usize, f32, f32),
 }
 
-impl Sandbox for Example {
-    type Message = Message;
+impl Example {
 
     fn new() -> Self {
         Example {
@@ -76,14 +70,6 @@ impl Sandbox for Example {
             ],
             connections: vec![(0, 1), (1, 2)],
         }
-    }
-
-    fn title(&self) -> String {
-        String::from("Iced Graph Editor - Basic Example")
-    }
-
-    fn theme(&self) -> iced::Theme {
-        iced::Theme::Dark
     }
 
     fn update(&mut self, _message: Message) {
@@ -148,5 +134,11 @@ impl Sandbox for Example {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+    }
+}
+
+impl Default for Example {
+    fn default() -> Self {
+        Self::new()
     }
 }

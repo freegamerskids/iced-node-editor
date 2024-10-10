@@ -1,5 +1,5 @@
-use iced::advanced::graphics::mesh::{Indexed, SolidVertex2D};
-use iced::{Point, Size};
+use iced::advanced::graphics::mesh::{Indexed, SolidVertex2D, Renderer};
+use iced::{Point, Rectangle, Size, Transformation};
 
 pub trait MeshRenderer {
     fn draw_buffers(&mut self, buffers: Indexed<SolidVertex2D>);
@@ -22,9 +22,11 @@ impl MeshRenderer for iced::Renderer {
             });
 
         let size = Size::new(max.x - min.x, max.y - min.y);
+        let transformation = Transformation::translate(max.x - min.x, max.y - min.y);
+        let clip_bounds = Rectangle::new(Point {x: max.x - min.y, y: max.y - min.y }, size);
 
         if size.width >= 1.0 && size.height >= 1.0 {
-            self.draw_mesh(iced::advanced::graphics::Mesh::Solid { buffers, size });
+            self.draw_mesh(iced::advanced::graphics::Mesh::Solid { buffers, transformation, clip_bounds });
         }
     }
 }

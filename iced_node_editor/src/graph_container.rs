@@ -3,9 +3,7 @@ use iced::{
         layout, renderer,
         widget::{self, Operation},
         Clipboard, Layout, Shell, Widget,
-    },
-    event, mouse, Background, Border, Color, Element, Event, Length, Point, Rectangle, Size,
-    Vector,
+    }, border::Radius, event, mouse, Background, Border, Color, Element, Event, Length, Point, Rectangle, Size, Vector
 };
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -262,7 +260,7 @@ where
         tree: &mut widget::Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
-        operation: &mut dyn Operation<Message>,
+        operation: &mut dyn Operation,
     ) {
         operation.container(None, layout.bounds(), &mut |operation| {
             self.content
@@ -617,7 +615,7 @@ where
             border: Border {
                 color: Color::BLACK,
                 width: 0.0_f32,
-                radius: [0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32].into(),
+                radius: Radius::new(0.0_f32),
             },
             ..renderer::Quad::default()
         },
@@ -670,7 +668,7 @@ fn draw_guidelines<Renderer>(
                 border: Border {
                     color: Color::BLACK,
                     width: 0.0_f32,
-                    radius: [0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32].into(),
+                    radius: Radius::new(0.0_f32),
                 },
                 ..renderer::Quad::default()
             },
@@ -701,7 +699,7 @@ fn draw_guidelines<Renderer>(
                 border: Border {
                     color: Color::BLACK,
                     width: 0.0_f32,
-                    radius: [0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32].into(),
+                    radius: Radius::new(0.0_f32),
                 },
                 ..renderer::Quad::default()
             },

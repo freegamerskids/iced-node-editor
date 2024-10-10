@@ -1,5 +1,5 @@
 use iced::widget::{button, container, text};
-use iced::{Color, Element, Length, Padding, Point, Sandbox, Settings};
+use iced::{Color, Element, Length, Padding, Point};
 use iced_node_editor::{
     graph_container, node, Connection, Endpoint, GraphNodeElement, Link, LogicalEndpoint, Matrix,
     Socket, SocketRole, SocketSide,
@@ -16,26 +16,21 @@ pub fn main() -> iced::Result {
             (window.inner_height().unwrap().as_f64().unwrap()) as u32,
         );
 
-        Example::run(Settings {
-            window: iced::window::Settings {
-                size: (width, height),
-                ..Default::default()
-            },
-            ..Default::default()
-        })?;
+        iced::application("Iced Node Editor - Sockets Example", Example::update, Example::view)
+            .theme(|_| iced::Theme::Dark)
+            .antialiasing(true)
+            .centered()
+            .window_size(iced::Size { width, height })
+            .run()?;
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    Example::run(Settings {
-        window: iced::window::Settings {
-            size: iced::Size {
-                width: 800.0,
-                height: 600.0,
-            },
-            ..Default::default()
-        },
-        ..Default::default()
-    })?;
+    iced::application("Iced Node Editor - Sockets Example", Example::update, Example::view)
+        .theme(|_| iced::Theme::Dark)
+        .antialiasing(true)
+        .centered()
+        .window_size(iced::Size { width: 800.0, height: 600.0 })
+        .run()?;
 
     Ok(())
 }
@@ -94,8 +89,7 @@ enum Message {
     ButtonPressed,
 }
 
-impl Sandbox for Example {
-    type Message = Message;
+impl Example {
 
     fn new() -> Self {
         let mut connections = HashMap::new();
@@ -138,14 +132,6 @@ impl Sandbox for Example {
             dangling_source: None,
             dangling_connection: None,
         }
-    }
-
-    fn title(&self) -> String {
-        String::from("Iced Node Editor - Sockets Example")
-    }
-
-    fn theme(&self) -> iced::Theme {
-        iced::Theme::Dark
     }
 
     fn update(&mut self, message: Message) {
@@ -305,6 +291,12 @@ impl Sandbox for Example {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+    }
+}
+
+impl Default for Example {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
