@@ -22,7 +22,7 @@ impl MeshRenderer for iced::Renderer {
             });
 
         let size = Size::new(max.x - min.x, max.y - min.y);
-        let transformation = Transformation::translate(max.x - min.x, max.y - min.y);
+        let transformation = Transformation::IDENTITY;
         let clip_bounds = Rectangle::new(Point {x: max.x - min.y, y: max.y - min.y }, size);
 
         if size.width >= 1.0 && size.height >= 1.0 {
