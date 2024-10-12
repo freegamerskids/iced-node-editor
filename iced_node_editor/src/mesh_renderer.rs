@@ -23,7 +23,7 @@ impl MeshRenderer for iced::Renderer {
 
         let size = Size::new(max.x - min.x, max.y - min.y);
         let transformation = Transformation::IDENTITY;
-        let clip_bounds = Rectangle::new(Point {x: max.x - min.y, y: max.y - min.y }, size);
+        let clip_bounds = Rectangle::INFINITE;
 
         if size.width >= 1.0 && size.height >= 1.0 {
             self.draw_mesh(iced::advanced::graphics::Mesh::Solid { buffers, transformation, clip_bounds });
